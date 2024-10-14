@@ -1,4 +1,4 @@
-# clap-py
+# clap-python
 
 > **Command Line Argument Parser for Python**
 

@@ -50,6 +50,14 @@ autodoc_default_options = {
     "members": True,
     "undoc-members": True,
     "show-inheritance": True,
+    "exclude-members": ",".join(
+        (
+            "__init__",
+            "__dict__",
+            "__weakref__",
+            "__module__",
+        )
+    ),
 }
 
 

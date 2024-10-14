@@ -24,7 +24,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/maxWiklund/clap-python"
-Documentation = "https://github.com/maxWiklund/clap-python"
+Documentation = "https://clap-python.readthedocs.io/en/latest"
 Repository = "https://github.com/maxWiklund/clap-python.git"
 "Bug Tracker" = "https://github.com/maxWiklund/clap-python/issues"
 

@@ -1,5 +1,5 @@
 Welcome to clap_python!
-====================
+=======================
 
 clap_python is a Python library designed to simplify the process of creating
 command-line interfaces (CLI) by mimicking the popular Rust library, clap.

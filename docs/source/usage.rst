@@ -178,7 +178,7 @@ You can restrict argument values to a set of predefined choices using `.choices(
    Arg("env").choices(["development", "production"]).help("Specify the environment")
 
 Example: Git-like CLI
---------------------=
+---------------------
 
 Here is an example of how to create a Git-like CLI application using `clap_python`:
 
@@ -214,6 +214,6 @@ In this example:
 - Each subcommand can have its own arguments, such as the `-m` option for `commit`.
 
 Summary
-------=
+-------
 
 `clap_python` is a flexible and easy-to-use Python library for building command-line tools. It provides a clear and intuitive API for defining commands, subcommands, and arguments, while offering powerful features like mutually exclusive groups, argument validation, and ANSI-styled output. With `clap_python`, you can create sophisticated CLI tools in a Pythonic way.
