@@ -183,7 +183,7 @@ class _ArgPrivate:
 
         # If no arguments are provided, check for default or raise an exception
         if not argv or argv[0].startswith("-"):
-            if self.default_value:
+            if self.default_value is not None:
                 argv.insert(0, self.default_value)
             else:
                 message = (
@@ -713,7 +713,7 @@ class _CommandPrivate:
         parsed_data = {}
         # Populate with default data.
         for arg in self.get_arguments():
-            if isinstance(arg, Arg) and arg.private.default_value:
+            if isinstance(arg, Arg) and arg.private.default_value is not None:
                 parsed_data[arg.private.name()] = arg.private.default_value
             elif isinstance(arg, Arg) and not arg.private.takes_value:
                 parsed_data[arg.private.name()] = False
