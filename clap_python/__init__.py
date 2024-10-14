@@ -512,6 +512,7 @@ class _CommandPrivate:
     positional_args: List[Arg] = field(default_factory=lambda: [])
     parent: _CommandPrivate = None
     style: _PrivateStyle = _PrivateStyle()
+    version: str = ""
 
     def get_style(self) -> _PrivateStyle:
         """Get app style."""
@@ -619,6 +620,10 @@ class _CommandPrivate:
         options = " ".join([usage_positional_args, usage_optional_args, usage_commands])
 
         return f"{color_text('Usage:', style=style.usage.style, color=style.usage.color)} {options}"
+
+    def _print_version(self) -> None:
+        """Print version info."""
+        sys.stdout.write(f"{os.path.basename(sys.argv[0])} {self.version}\n")
 
     def print_help(self) -> None:
         """Print help message cli."""
@@ -732,6 +737,9 @@ class _CommandPrivate:
             if arg_str in ("-h", "--help"):
                 self.print_help()
                 sys.exit(0)
+            elif arg_str in ("-V", "--version"):
+                self._print_version()
+                sys.exit(0)
 
             # Parse positional arguments
             for arg in self.positional_args:
@@ -751,10 +759,7 @@ class _CommandPrivate:
                             if arg.private.name() == "help":
                                 self.print_help()
                             elif arg.private.name() == "version":
-                                sys.stdout.write(
-                                    f"{os.path.basename(sys.argv[0])} {arg.private.default_value}\n"
-                                )
-
+                                self._print_version()
                             sys.exit(0)
                         kwargs = (
                             {
@@ -926,17 +931,16 @@ class App(SubCommand):
             Self.
 
         """
+        self.private.version = version_number
         for arg in self.private.arguments:
             if arg.private.name() == "version":
-                arg.default(version_number)
                 return self
 
-        help_arg = (
-            Arg("--version").help("Print version info and exit").default(version_number)
-        )
-        help_arg.private.is_help_arg = True
-        help_arg.private.parent = self.private
-        self.private.arguments.insert(1, help_arg)
+        version_arg = Arg("--version", "-V").help("Print version info and exit")
+        version_arg.takes_value(False)
+        version_arg.private.is_help_arg = True
+        version_arg.private.parent = self.private
+        self.private.arguments.insert(1, version_arg)
         return self
 
     def style(self, style: Style) -> App:

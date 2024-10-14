@@ -11,7 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
+import sys
 from datetime import datetime
 from unittest import TestCase, mock
 
@@ -197,3 +198,21 @@ class TestApp(TestCase):
         self.assertEqual(
             expected_result, app.parse_args(["--date-time", "2024-01-01:19:00:01"])
         )
+
+    @mock.patch("clap_python.sys.stdout.write")
+    def test_version_short_flag(self, std_out_write):
+        app = App().version("1.51.0").arg(Arg("data"))
+
+        expected_result = f"{os.path.basename(sys.argv[0])} 1.51.0\n"
+        with self.assertRaises(SystemExit):
+            app.parse_args(["-V"])
+        std_out_write.assert_called_with(expected_result)
+
+    @mock.patch("clap_python.sys.stdout.write")
+    def test_version_long_flag(self, std_out_write):
+        app = App().version("1.51.0").arg(Arg("data"))
+
+        expected_result = f"{os.path.basename(sys.argv[0])} 1.51.0\n"
+        with self.assertRaises(SystemExit):
+            app.parse_args(["--version"])
+        std_out_write.assert_called_with(expected_result)
