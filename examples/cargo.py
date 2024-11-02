@@ -14,7 +14,6 @@
 from clap_python import App, Arg, SubCommand
 from clap_python.style import AnsiColor, AnsiStyle, Style, TextStyle
 
-
 docs = """
 Cargo is a command-line tool that mimics Cargo functionalities for managing Rust projects."""
 

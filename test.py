@@ -16,7 +16,9 @@ import sys
 from datetime import datetime
 from unittest import TestCase, mock
 
+import clap_python.complete
 from clap_python import App, Arg, ClapPyException, MutuallyExclusiveGroup, SubCommand
+from clap_python.complete import _autocomplete_args
 
 complex_app = (
     App()
@@ -56,8 +58,24 @@ complex_app = (
     .arg(Arg("--verbose", "-v"))
 )
 
-
 simple_parser = App().arg(Arg("--hello")).arg(Arg("--items").multiple_values(True))
+
+date_app = (
+    App()
+    .arg(Arg("--year", "-y").choices([str(date) for date in range(2019, 2029)]))
+    .arg(Arg("--name"))
+)
+
+pip_app = (
+    App("pip")
+    .arg(
+        SubCommand("install")
+        .arg(Arg("requirement specifier").required(False))
+        .arg(Arg("-r").value_name("requirements file"))
+    )
+    .arg(SubCommand("uninstall"))
+    .arg(SubCommand("list"))
+)
 
 
 class TestApp(TestCase):
@@ -216,3 +234,102 @@ class TestApp(TestCase):
         with self.assertRaises(SystemExit):
             app.parse_args(["--version"])
         std_out_write.assert_called_with(expected_result)
+
+    def test_sub_command_and_arg_with_multiple_values101(self):
+        app = App().arg(Arg("--names").multiple_values(True)).arg(SubCommand("abc"))
+        expected_result = {"names": ["test"], "abc": {}}
+        self.assertEqual(expected_result, app.parse_args(["--names", "test", "abc"]))
+
+    def test_sub_command_and_arg_with_multiple_values102(self):
+        app = App().arg(Arg("--names").multiple_values(True)).arg(SubCommand("abc"))
+        with self.assertRaises(ClapPyException) as context:
+            app.private.parse(["--names", "abc"], [], False)
+        self.assertEqual("expected at least one argument", context.exception.msg)
+
+    def test_required_group(self):
+        app = App().arg(
+            MutuallyExclusiveGroup()
+            .arg(Arg("--a").takes_value(False))
+            .arg(Arg("--b").takes_value(False))
+            .required(True)
+        )
+        with self.assertRaises(ClapPyException) as context:
+            app.private.parse([], [], False)
+        self.assertEqual(
+            "One of the following arguments are required: --a | --b",
+            context.exception.msg,
+        )
+
+
+def mock_is_file(value):
+    return value in [os.path.join(os.getcwd(), f) for f in ("file1.png", "file2.png")]
+
+
+def mock_is_dir(value):
+    return value in [os.path.join(os.getcwd(), f) for f in ("folder22",)]
+
+
+class TestAutoComplete(TestCase):
+    def test_complete_date(self):
+        expected_result = ["2019"]
+        self.assertEqual(
+            expected_result, _autocomplete_args(date_app.private, ["--year", "201"])
+        )
+
+    def test_complete_next_arg(self):
+        expected_result = ["--help", "-h", "--name"]
+        self.assertEqual(
+            expected_result, _autocomplete_args(date_app.private, ["--year", "2025"])
+        )
+
+    def test_complete_arg_that_takes_no_value(self):
+        app = App().arg(Arg("--name")).arg(Arg("--sync").takes_value(False))
+        expected_result = ["--help", "-h", "--name"]
+        self.assertEqual(expected_result, _autocomplete_args(app.private, ["--sync"]))
+
+    def test_help_arg(self):
+        expected_result = ["--help"]
+        self.assertEqual(
+            expected_result, _autocomplete_args(date_app.private, ["--year", "--he"])
+        )
+
+    def test_unknown_word(self):
+        expected_result = ["te"]
+
+        self.assertEqual(
+            expected_result,
+            _autocomplete_args(complex_app.private, ["-e", "maya", "te"]),
+        )
+
+    def test_complete_sub_command_without_prefix(self):
+        expected_result = ["install"]
+        self.assertEqual(
+            expected_result, _autocomplete_args(pip_app.private, ["instal"])
+        )
+
+        expected_result = ["--help", "-h", "-r"]
+        self.assertEqual(
+            expected_result, _autocomplete_args(pip_app.private, ["install"])
+        )
+
+    @mock.patch("clap_python.complete.os.path.isdir", side_effect=mock_is_dir)
+    @mock.patch("clap_python.complete.os.path.isfile", side_effect=mock_is_file)
+    @mock.patch("clap_python.complete.os.path.exists", side_effect=mock_is_file)
+    @mock.patch(
+        "clap_python.complete.os.path.split", side_effect=lambda value: ("", value)
+    )
+    @mock.patch(
+        "clap_python.complete.os.listdir",
+        return_value=["file1.png", "file2.png", "folder22"],
+    )
+    def test_autocomplete_multiple_args(
+        self, mock_listdir, mock_split, mock_exists, mock_is_file, mock_is_dir
+    ):
+        app_test = App().arg(Arg("-c")).arg(Arg("--files").multiple_values(True))
+        expected_result = ["folder22/"]
+        self.assertEqual(
+            expected_result,
+            clap_python.complete._autocomplete_args(
+                app_test.private, ["--files", "file1.png", "folder"]
+            ),
+        )

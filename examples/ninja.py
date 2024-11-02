@@ -27,75 +27,71 @@ styles = (
 
 def cli() -> dict:
     return (
-        (
-            App()
-            .version("1.12.4")
-            .arg(
-                Arg("--verbose", "-v")
-                .help("show all command lines while building")
-                .takes_value(False)
-            )
-            .arg(
-                Arg("--quiet")
-                .help("don't show progress status, just command output")
-                .takes_value(False)
-            )
-            .arg(
-                Arg("-C")
-                .value_name("DIR")
-                .help("change to DIR before doing anything else")
-            )
-            .arg(
-                Arg("-f")
-                .value_name("FILE")
-                .help("specify input build file [default=build.ninja]")
-            )
-            .arg(
-                Arg("-j")
-                .value_name("N")
-                .help(
-                    "run N jobs in parallel (0 means infinity) [default=10 on this system]"
-                )
-            )
-            .arg(
-                Arg("-k")
-                .value_name("N")
-                .help("keep going until N jobs fail (0 means infinity) [default=1]")
-            )
-            .arg(
-                Arg("-l")
-                .value_name("N")
-                .help("do not start new jobs if the load average is greater than N")
-            )
-            .arg(
-                Arg("-n")
-                .help("dry run (don't run commands but act like they succeeded)")
-                .takes_value(False)
-            )
-            .arg(
-                Arg("-d")
-                .value_name("MODE")
-                .help("enable debugging (use '-d list' to list modes)")
-            )
-            .arg(
-                Arg("-t")
-                .value_name("Tool")
-                .help(
-                    (
-                        "run a subtool (use '-t list' to list subtools) terminates "
-                        "toplevel options; further flags are passed to the tool"
-                    )
-                )
-            )
-            .arg(
-                Arg("-w")
-                .value_name("FLAG")
-                .help("adjust warnings (use '-w list' to list warnings)")
+        App()
+        .version("1.12.4")
+        .style(styles)
+        .width(170)
+        .arg(
+            Arg("--verbose", "-v")
+            .help("show all command lines while building")
+            .takes_value(False)
+        )
+        .arg(
+            Arg("--quiet")
+            .help("don't show progress status, just command output")
+            .takes_value(False)
+        )
+        .arg(
+            Arg("-C").value_name("DIR").help("change to DIR before doing anything else")
+        )
+        .arg(
+            Arg("-f")
+            .value_name("FILE")
+            .help("specify input build file [default=build.ninja]")
+        )
+        .arg(
+            Arg("-j")
+            .value_name("N")
+            .help(
+                "run N jobs in parallel (0 means infinity) [default=10 on this system]"
             )
         )
-        .style(styles)
-        .parse_args()
-    )
+        .arg(
+            Arg("-k")
+            .value_name("N")
+            .help("keep going until N jobs fail (0 means infinity) [default=1]")
+        )
+        .arg(
+            Arg("-l")
+            .value_name("N")
+            .help("do not start new jobs if the load average is greater than N")
+        )
+        .arg(
+            Arg("-n")
+            .help("dry run (don't run commands but act like they succeeded)")
+            .takes_value(False)
+        )
+        .arg(
+            Arg("-d")
+            .value_name("MODE")
+            .help("enable debugging (use '-d list' to list modes)")
+        )
+        .arg(
+            Arg("-t")
+            .value_name("Tool")
+            .help(
+                (
+                    "run a subtool (use '-t list' to list subtools) terminates "
+                    "toplevel options; further flags are passed to the tool"
+                )
+            )
+        )
+        .arg(
+            Arg("-w")
+            .value_name("FLAG")
+            .help("adjust warnings (use '-w list' to list warnings)")
+        )
+    ).parse_args()
 
 
 if __name__ == "__main__":

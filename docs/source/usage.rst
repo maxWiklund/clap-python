@@ -213,6 +213,65 @@ In this example:
 - The CLI has three subcommands: `init`, `commit`, and `clone`.
 - Each subcommand can have its own arguments, such as the `-m` option for `commit`.
 
+
+
+Autocompletion
+----------------------------------------------
+
+The `autocomplete` function in `clap_python` provides tab-completion functionality for
+applications, helping users discover available commands, options, and file paths as they
+type. This documentation explains how to set up and use autocompletion for a command-line
+application built with `clap_python`.
+
+To enable autocompletion for your application, follow these steps:
+
+1. **Define Your Application**: Set up your command-line application with necessary commands, options, and arguments using `App` and `Arg`.
+2. **Enable Autocompletion**: Call the `autocomplete` function with your `App` instance.
+3. **Parse Arguments**: Use `app.parse_args()` to parse user input and enable autocompletion.
+4. **Register your app** For bash to tab-complete your app you need to generate a file.
+
+Autocompletion Example
+----------------------
+
+The following example demonstrates how to enable autocompletion in a `clap_python` application:
+
+Create the app.
+
+.. code-block:: shell
+
+    touch my_cool_app
+    chmod +x my_cool_app
+
+Code of ``my_cool_app``
+
+.. code-block:: python
+
+    #!/usr/bin/env python
+
+    from clap_python import App, Arg
+    from clap_python.complete import autocomplete
+
+    app = App().arg(Arg("-c")).arg(Arg("--files").multiple_values(True))
+    autocomplete(app) # Step 2: Enable autocompletion
+    args = app.parse_args() # Step 3: Parse arguments
+    print(args)
+
+
+Register the app
+
+.. code-block:: shell
+
+    clap-python-register-complete-app --name my_cool_app
+    File created at '/usr/local/etc/bash_completion.d/my_cool_app'
+
+If your on MacOS you need to tell ``bash`` to source your ``bash_completion`` dir.
+In your ``~/.bashrc`` make sure you have
+
+.. code-block:: bash
+
+    [ -f /usr/local/etc/bash_completion ] && . /usr/local/etc/bash_completion
+
+
 Summary
 -------
 

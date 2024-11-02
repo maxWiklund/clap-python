@@ -52,3 +52,15 @@ if __name__ == "__main__":
     args = App().arg(Arg("names").multiple_values(True)).parse_args()
     print(f"names: {args['names']}")
 ```
+
+## Autocomplete
+```python
+from clap_python import App, Arg
+from clap_python.complete import autocomplete
+
+app = App().arg(Arg("-c")).arg(Arg("--files").multiple_values(True))
+autocomplete(app) # Enable autocompletion
+args = app.parse_args() # Parse arguments
+print(args)
+```
+You can read more at [docs](https://clap-python.readthedocs.io/en/latest/usage.html)

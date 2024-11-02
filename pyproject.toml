@@ -28,6 +28,11 @@ Documentation = "https://clap-python.readthedocs.io/en/latest"
 Repository = "https://github.com/maxWiklund/clap-python.git"
 "Bug Tracker" = "https://github.com/maxWiklund/clap-python/issues"
 
+
+[project.scripts]
+clap-python-register-complete-app = "clap_python.complete._register_app:run"
+
+
 [tool.hatch.build.targets.wheel]
 packages = ["clap_python"]
 

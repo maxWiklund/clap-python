@@ -79,7 +79,7 @@ def _format_arg(
 
     if isinstance(arg, SubCommand):
         return msg
-    elif arg.private.choices:
+    elif arg.private.choices and not arg.private.value_name:
         args = f"{{{','.join(arg.private.choices)}}}"
         if not arg.private.long_name.startswith("-"):
             return args
@@ -181,8 +181,15 @@ class _ArgPrivate:
         if not self.takes_value:
             return {self.name(): True}
 
+        arg_names = [_arg.private.long_name for _arg in self.parent.get_arguments()]
+        arg_names += [
+            _arg.private.short_name
+            for _arg in self.parent.get_arguments()
+            if _arg.private.short_name
+        ]
+
         # If no arguments are provided, check for default or raise an exception
-        if not argv or argv[0].startswith("-"):
+        if not argv or argv[0] in arg_names:
             if self.default_value is not None:
                 argv.insert(0, self.default_value)
             else:
@@ -199,7 +206,8 @@ class _ArgPrivate:
             return {self.name(): value}
 
         values = []
-        while argv and not argv[0].startswith("-"):
+
+        while argv and argv[0] not in arg_names:
             values.append(self.value_parser(argv.pop(0)))
 
         # Validate values.
@@ -285,7 +293,7 @@ class Arg:
             Self
 
         """
-        self.private.choices = set(choices)
+        self.private.choices = choices
 
         def validate(value: Any) -> str:
             """Validate that ``value`` matches choices.
@@ -434,6 +442,7 @@ class _GroupPrivate:
     """Class to hold business logic for ``MutuallyExclusiveGroup`` class."""
 
     children: List[Union[SubCommand, Arg]] = field(default_factory=lambda: [])
+    required: bool = False
     help_heading: str = ""
 
     @property
@@ -452,6 +461,20 @@ class MutuallyExclusiveGroup:
 
     def __init__(self):
         self.private = _GroupPrivate()
+
+    def required(self, value: bool) -> Arg:
+        """Set enabled and not passed parser will fail.
+
+        Args:
+            value: If True and arg is missing parser will fail and exit.
+
+        Returns:
+            Self.
+
+        """
+        # If the argument is positional it is always required.
+        self.private.required = value
+        return self
 
     def help_heading(self, label: str) -> MutuallyExclusiveGroup:
         """Lets you organize the help message visually by adding a header above related options.
@@ -513,13 +536,20 @@ class _CommandPrivate:
     parent: _CommandPrivate = None
     style: _PrivateStyle = _PrivateStyle()
     version: str = ""
+    width: int = 100
 
     def get_style(self) -> _PrivateStyle:
         """Get app style."""
+        return self.get_app().style
+
+    def get_app(self) -> _CommandPrivate:
         root = self
         while root.parent:
             root = root.parent
-        return root.style
+        return root
+
+    def get_width(self) -> int:
+        return self.get_app().width
 
     def name(self) -> str:
         """Name of command.
@@ -630,6 +660,8 @@ class _CommandPrivate:
         style = self.get_style()
         style_no_color = _PrivateStyle()
 
+        max_text_width = self.get_width()
+
         msg = ""
         if self.help_msg:
             msg += f"{self.help_msg}\n"
@@ -664,7 +696,7 @@ class _CommandPrivate:
                 spaces = " " * (longest_str - len(text_no_color))
 
                 wrapper = textwrap.TextWrapper(
-                    width=100, subsequent_indent=" " * (longest_str + 1)
+                    width=max_text_width, subsequent_indent=" " * (longest_str + 1)
                 )
                 line = f"{text}{spaces} {arg.private.help_msg}"
                 msg += f"{wrapper.fill(line)}\n"
@@ -718,6 +750,8 @@ class _CommandPrivate:
         parsed_data = {}
         # Populate with default data.
         for arg in self.get_arguments():
+            if isinstance(arg, Arg) and arg.private.is_help_arg:
+                continue
             if isinstance(arg, Arg) and arg.private.default_value is not None:
                 parsed_data[arg.private.name()] = arg.private.default_value
             elif isinstance(arg, Arg) and not arg.private.takes_value:
@@ -729,6 +763,12 @@ class _CommandPrivate:
             for arg in self.positional_args + self.get_arguments()
             if isinstance(arg, Arg) and arg.private.required
         ]
+        required_groups = [
+            arg
+            for arg in self.arguments
+            if isinstance(arg, MutuallyExclusiveGroup)
+            if arg.private.required
+        ]
 
         while args:
             arg_str = args.pop(0)
@@ -737,7 +777,7 @@ class _CommandPrivate:
             if arg_str in ("-h", "--help"):
                 self.print_help()
                 sys.exit(0)
-            elif arg_str in ("-V", "--version"):
+            elif arg_str in ("-V", "--version") and self.version:
                 self._print_version()
                 sys.exit(0)
 
@@ -805,8 +845,32 @@ class _CommandPrivate:
             arg.private.long_name for arg in required_args if arg.private not in visited
         ]
         if missing_args:
+            arg_text = color_text(
+                ", ".join(missing_args),
+                style=style_class.flags.style,
+                color=style_class.flags.color,
+            )
             raise ClapPyException(
-                f"the following arguments are required: {color_text(', '.join(missing_args), style=style_class.flags.style, color=style_class.flags.color)}",
+                f"the following arguments are required: {arg_text}",
+                self,
+            )
+        missing_group_args = [
+            group
+            for group in required_groups
+            if not any(arg.private in visited for arg in group)
+        ]
+        if missing_group_args:
+            missing_args_text = " | ".join(
+                arg.private.long_name for arg in missing_group_args[0]
+            )
+
+            arg_text = color_text(
+                missing_args_text,
+                style=style_class.flags.style,
+                color=style_class.flags.color,
+            )
+            raise ClapPyException(
+                f"One of the following arguments are required: {arg_text}",
                 self,
             )
 
@@ -821,6 +885,7 @@ class SubCommand:
 
         help_arg = Arg("--help", "-h").help("Show this help message and exit")
         help_arg.private.is_help_arg = True
+        help_arg.takes_value(False)
         help_arg.private.parent = self.private
         self.private.arguments.insert(0, help_arg)
 
@@ -896,6 +961,8 @@ class SubCommand:
 
         arg.private.parent = self.private
         if arg.private.long_name.startswith("-") or isinstance(arg, SubCommand):
+            if isinstance(arg, Arg):
+                arg.private.tag = self.private.help_heading
             self.private.arguments.append(arg)
         else:
             arg.private.tag = "Arguments"
@@ -918,8 +985,8 @@ class App(SubCommand):
 
     """
 
-    def __init__(self):
-        super().__init__(os.path.basename(sys.argv[0]))
+    def __init__(self, name: str = os.path.basename(sys.argv[0])):
+        super().__init__(name)
 
     def version(self, version_number: str) -> App:
         """Set version number for app.
@@ -941,6 +1008,19 @@ class App(SubCommand):
         version_arg.private.is_help_arg = True
         version_arg.private.parent = self.private
         self.private.arguments.insert(1, version_arg)
+        return self
+
+    def width(self, value: int) -> App:
+        """Set max width of help text.
+
+        Arg:
+            value: Max width.
+
+        Returns:
+            Self.
+
+        """
+        self.private.width = value
         return self
 
     def style(self, style: Style) -> App:
