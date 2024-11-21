@@ -961,7 +961,7 @@ class SubCommand:
 
         arg.private.parent = self.private
         if arg.private.long_name.startswith("-") or isinstance(arg, SubCommand):
-            if isinstance(arg, Arg):
+            if isinstance(arg, Arg) and self.private.help_heading:
                 arg.private.tag = self.private.help_heading
             self.private.arguments.append(arg)
         else:
