@@ -13,7 +13,7 @@
 # limitations under the License.
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 
@@ -83,13 +83,13 @@ class _PrivateStyle:
 
     """
 
-    flags: TextStyle = TextStyle(AnsiColor.White)
-    usage: TextStyle = TextStyle(AnsiColor.White)
-    tip: TextStyle = TextStyle(AnsiColor.White)
+    flags: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
+    usage: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
+    tip: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
 
-    headers: TextStyle = TextStyle(AnsiColor.White)
-    error: TextStyle = TextStyle(AnsiColor.White)
-    value_names: TextStyle = TextStyle(AnsiColor.White)
+    headers: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
+    error: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
+    value_names: TextStyle = field(default_factory=lambda: TextStyle(AnsiColor.White))
 
 
 class Style:

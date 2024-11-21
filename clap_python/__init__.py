@@ -534,7 +534,7 @@ class _CommandPrivate:
     )
     positional_args: List[Arg] = field(default_factory=lambda: [])
     parent: _CommandPrivate = None
-    style: _PrivateStyle = _PrivateStyle()
+    style: _PrivateStyle = field(default_factory=_PrivateStyle)
     version: str = ""
     width: int = 100
 
