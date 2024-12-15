@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import difflib
-import importlib.metadata
 import os
 import re
 import sys
@@ -24,7 +23,13 @@ from typing import Any, Callable, List, Tuple, Union
 
 from clap_python.style import Style, _PrivateStyle
 
-__version__ = importlib.metadata.version("clap_python")
+try:
+    import importlib.metadata
+    __version__ = importlib.metadata.version("clap_python")
+except ImportError:
+    import importlib_metadata
+    __version__ = importlib_metadata.version("clap_python")
+
 
 _ARG_PREFIX_RE = re.compile(r"^(-+)")
 

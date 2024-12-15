@@ -4,8 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clap_python"
-version = "0.2.2"
-dependencies = []
+version = "0.2.3"
 requires-python = ">=3.7"
 authors = [{name = "Max Wiklund"},]
 maintainers = [{name = "Max Wiklund"}]
@@ -21,6 +20,9 @@ classifiers = [
     "Programming Language :: Python",
     "Typing :: Typed",
 ]
+
+dependencies = ['importlib-metadata;python_version<"3.8"']
+
 
 [project.urls]
 Homepage = "https://github.com/maxWiklund/clap-python"
