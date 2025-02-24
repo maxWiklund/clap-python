@@ -68,10 +68,33 @@ date_app = (
 
 pip_app = (
     App("pip")
+    .subcommand_required(True)
     .arg(
         SubCommand("install")
-        .arg(Arg("requirement specifier").required(False))
-        .arg(Arg("-r").value_name("requirements file"))
+        .arg(Arg("requirement-specifier").required(False))
+        .arg(
+            Arg("-r", "--requirement")
+            .value_name("requirements file")
+            .help(
+                "Install from the given requirements file. This option can be used multiple times."
+            )
+        )
+        .arg(
+            Arg("-e", "--editable")
+            .value_name("--editable <path/url>")
+            .help(
+                'Install a project in editable mode (i.e. setuptools "develop mode") from a local project path or a VCS url.'
+            )
+        )
+        .arg(
+            Arg("--user").help(
+                (
+                    "Install to the Python user install directory for your platform. Typically "
+                    "~/.local/, or %APPDATA%\Python on Windows. (See the Python documentation for "
+                    "site.USER_BASE for full details.)"
+                )
+            )
+        )
     )
     .arg(SubCommand("uninstall"))
     .arg(SubCommand("list"))
@@ -153,6 +176,27 @@ class TestApp(TestCase):
             ),
         )
 
+    def test_uncomplete_args(self):
+        with self.assertRaises(ClapPyException) as contxt:
+            complex_app.private.parse(["-e", "maya", "--run", "-c"], [], False)
+        self.assertEqual(contxt.exception.msg, "expected one argument")
+
+    def test_default_args_populated(self):
+        expected_result = {
+            "list": False,
+            "generate": False,
+            "env": {
+                "list": False,
+                "editor": False,
+                "env_name": "maya",
+                "run": {"command": "bash"},
+            },
+        }
+
+        self.assertEqual(
+            expected_result, complex_app.parse_args(["-e", "maya", "--run"])
+        )
+
     def test_parse_args_with_unknown_not_enabled(self):
         with self.assertRaises(ClapPyException) as context:
             complex_app.private.parse(
@@ -192,10 +236,33 @@ class TestApp(TestCase):
     def test_mutually_exclusive_group101(self):
         with self.assertRaises(ClapPyException) as context:
             visited = []
-            (complex_app.private.parse(["-g", "--list"], visited, False),)
+            complex_app.private.parse(["-g", "--list"], visited, False)
+
         self.assertEqual(
             context.exception.msg,
             "argument --list not allowed with argument --generate",
+        )
+
+    def test_mutually_exclusive_group102(self):
+        app = (
+            App()
+            .arg(MutuallyExclusiveGroup().arg(SubCommand("hello")).arg(Arg("--test")))
+            .arg(Arg("--debug"))
+        )
+
+        with self.assertRaises(ClapPyException) as context:
+            visited = []
+            app.private.parse(["--test", "1", "hello"], visited, False)
+
+        self.assertEqual(
+            context.exception.msg, "argument hello not allowed with argument --test"
+        )
+
+    def test_subcommand_required(self):
+        with self.assertRaises(ClapPyException) as context:
+            pip_app.private.parse([], [], False)
+        self.assertTrue(
+            "requires a subcommand but one was not provided" in context.exception.msg
         )
 
     def test_value_parser_int(self):
@@ -235,6 +302,16 @@ class TestApp(TestCase):
             app.parse_args(["--version"])
         std_out_write.assert_called_with(expected_result)
 
+    @mock.patch("clap_python.sys.stdout.write")
+    def test_help_message(self, std_out_write):
+        expected_result = "Usage:  [--year -y YEAR] [--name NAME] \n\nOptions:\n  --help -h        Show this help message and exit\n  --year -y YEAR\n  --name NAME\n\n"
+        with self.assertRaises(SystemExit):
+            date_app.parse_args(["--year", "2024", "--help"])
+        std_out_write.assert_called_with(expected_result)
+        with self.assertRaises(SystemExit):
+            date_app.parse_args(["-h"])
+        std_out_write.assert_called_with(expected_result)
+
     def test_sub_command_and_arg_with_multiple_values101(self):
         app = App().arg(Arg("--names").multiple_values(True)).arg(SubCommand("abc"))
         expected_result = {"names": ["test"], "abc": {}}
@@ -258,6 +335,16 @@ class TestApp(TestCase):
         self.assertEqual(
             "One of the following arguments are required: --a | --b",
             context.exception.msg,
+        )
+
+    def test_optional_positional_args(self):
+        with self.assertRaises(ClapPyException) as context:
+            pip_app.private.parse(["install", "-e", ".", "hello"], [], False)
+        self.assertEqual("unrecognized arguments: hello", context.exception.msg)
+
+        self.assertEqual(
+            {"install": {"requirement_specifier": "."}},  # Expected result
+            pip_app.parse_args(["install", "."]),
         )
 
 
@@ -307,7 +394,15 @@ class TestAutoComplete(TestCase):
             expected_result, _autocomplete_args(pip_app.private, ["instal"])
         )
 
-        expected_result = ["--help", "-h", "-r"]
+        expected_result = [
+            "--help",
+            "-h",
+            "-r",
+            "--requirement",
+            "-e",
+            "--editable",
+            "--user",
+        ]
         self.assertEqual(
             expected_result, _autocomplete_args(pip_app.private, ["install"])
         )

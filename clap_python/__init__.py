@@ -25,9 +25,11 @@ from clap_python.style import Style, _PrivateStyle
 
 try:
     import importlib.metadata
+
     __version__ = importlib.metadata.version("clap_python")
 except ImportError:
     import importlib_metadata
+
     __version__ = importlib_metadata.version("clap_python")
 
 
@@ -184,6 +186,7 @@ class _ArgPrivate:
             )
 
         if not self.takes_value:
+            # The arg does not take any value.
             return {self.name(): True}
 
         arg_names = [_arg.private.long_name for _arg in self.parent.get_arguments()]
@@ -193,17 +196,14 @@ class _ArgPrivate:
             if _arg.private.short_name
         ]
 
-        # If no arguments are provided, check for default or raise an exception
+        # If no arguments are provided raise an exception
         if not argv or argv[0] in arg_names:
-            if self.default_value is not None:
-                argv.insert(0, self.default_value)
-            else:
-                message = (
-                    "expected at least one argument"
-                    if self.multiple_values
-                    else "expected one argument"
-                )
-                raise ClapPyException(message, self.parent)
+            message = (
+                "expected at least one argument"
+                if self.multiple_values
+                else "expected one argument"
+            )
+            raise ClapPyException(message, self.parent)
 
         if not self.multiple_values:
             value = self.value_parser(argv.pop(0))
@@ -721,7 +721,7 @@ class _CommandPrivate:
             args: Args to parse.
             visited: List of visited nodes.
             allow_unknown:
-                If true allow parsing of unknown arguments sepaerated by "--"
+                If true allow parsing of unknown arguments separated by "--"
                 else raise exception.
 
         Raises:
@@ -737,21 +737,140 @@ class _CommandPrivate:
             self.print_help()
             sys.exit(0)
 
-        # Check for mutually exclusive arguments
-        active_args = [
-            arg.private.long_name
-            for arg in (self.group or [])
-            if arg.private in visited
-        ]
-        if active_args:
-            raise ClapPyException(
-                (
-                    f"argument {color_text(self.long_name, style=style_class.flags.style, color=style_class.flags.color)} "
-                    f"not allowed with argument {color_text(active_args[0], style=style_class.error.style, color=style_class.error.color)}"
-                ),
-                self.parent,
+        self._check_mutually_exclusive_args(visited, style_class)
+
+        # Populate with default data.
+        parsed_data = self._initialize_parsed_data()
+        self._skip_positional_args = False
+
+        while args:
+            arg_str = args.pop(0)
+            # Check for help or version argument
+            if self._parse_global_args(arg_str):
+                sys.exit(0)
+            if self._parse_positional_args(arg_str, args, visited, parsed_data):
+                continue
+            # Parse optional arguments or subcommands
+            self._parse_subcommands_and_options(
+                arg_str, args, visited, parsed_data, allow_unknown
             )
 
+        self._validate_subcommands(visited)
+        self._validate_required_arguments(visited, style_class)
+        return {self.name(): parsed_data}
+
+    def _parse_positional_args(
+        self,
+        arg_str: str,
+        args: List[str],
+        visited: List[Union[_ArgPrivate, _CommandPrivate]],
+        parsed_data,
+    ) -> bool:
+        """Parse positional arguments.
+
+        Args:
+            arg_str: The current argument string to parse.
+            args: The remaining arguments to parse.
+            visited: List of arguments or commands that have already been visited during parsing.
+            parsed_data: Dict to store parsed argument data in.
+
+        Returns:
+            True if a positional argument was successfully parsed.
+
+        """
+        if self._skip_positional_args:
+            return False
+
+        # Parse positional arguments
+        for arg in self.positional_args:
+            if arg_str.startswith("-"):
+                self._skip_positional_args = True
+                return False
+
+            if arg.private not in visited:
+                args.insert(0, arg_str)
+                parsed_data.update(arg.private.parse(args, visited))
+                visited.append(arg.private)
+                return True
+        return False
+
+    def _parse_subcommands_and_options(
+        self,
+        arg_str: str,
+        args: List[str],
+        visited: List[Union[_ArgPrivate, _CommandPrivate]],
+        parsed_data: dict,
+        allow_unknown: bool,
+    ) -> None:
+        """Parse optional arguments and subcommands.
+
+        Args:
+            arg_str: The current argument string to parse.
+            args: The remaining arguments to parse.
+            visited: List of arguments or commands that have already been visited during parsing.
+            parsed_data: Dict to store parsed argument data in.
+            allow_unknown: If True allow parsing of unknown arguments.
+
+        Raises:
+            ClapPyException: If an argument is unrecognized and `allow_unknown`
+            is `False`.
+
+        """
+        # Parse optional arguments or subcommands
+        for arg in self.get_arguments():
+            if arg_str in (
+                arg.private.long_name,
+                arg.private.short_name,
+            ):
+                if self._parse_global_args(arg.private.name()):
+                    sys.exit(0)
+
+                kwargs = (
+                    {
+                        "args": args,
+                        "visited": visited,
+                        "allow_unknown": allow_unknown,
+                    }
+                    if isinstance(arg, SubCommand)
+                    else {"argv": args, "visited": visited}
+                )
+                parsed_data.update(arg.private.parse(**kwargs))
+                visited.append(arg.private)
+                return
+        else:
+            # Handle unknown arguments
+            if arg_str == "--" and allow_unknown:
+                parsed_data.setdefault("unknown", []).extend(args)
+                args.clear()  # All args that where left have
+                # been moved to unknown. Clear args to stop loop.
+            else:
+                style_class = self.get_style()
+                raise ClapPyException(
+                    f"unrecognized arguments: {color_text(arg_str, style=style_class.error.style, color=style_class.error.color)}",
+                    self,
+                )
+
+    def _parse_global_args(self, arg_str: str) -> bool:
+        """Parse global args (help arg and version arg).
+
+        Args:
+            arg_str: Arg string to parse.
+
+        Returns:
+            True if global arg was parsed.
+
+        """
+        # Check for help argument
+        if arg_str in ("-h", "--help"):
+            self.print_help()
+            return True
+        elif arg_str in ("-V", "--version") and self.version:
+            self._print_version()
+            return True
+        return False
+
+    def _initialize_parsed_data(self) -> dict:
+        """Initialize the parsed data dictionary with default values."""
         parsed_data = {}
         # Populate with default data.
         for arg in self.get_arguments():
@@ -761,7 +880,51 @@ class _CommandPrivate:
                 parsed_data[arg.private.name()] = arg.private.default_value
             elif isinstance(arg, Arg) and not arg.private.takes_value:
                 parsed_data[arg.private.name()] = False
+        return parsed_data
 
+    def _check_mutually_exclusive_args(
+        self,
+        visited: List[Union[_ArgPrivate, _CommandPrivate]],
+        style_class: _PrivateStyle,
+    ) -> None:
+        """Check for mutually exclusive arguments in the visited list.
+
+        Args:
+            visited: List of arguments or commands that have already been visited during parsing.
+            style_class: Style object for error message.
+
+        Raises:
+            ClapPyException: If mutually exclusive arguments are found.
+
+        """
+        active_args = [
+            arg.private.long_name
+            for arg in (self.group or [])
+            if arg.private in visited
+        ]
+        if active_args:
+            raise ClapPyException(
+                f"argument {color_text(self.long_name, style=style_class.flags.style, color=style_class.flags.color)} "
+                f"not allowed with argument {color_text(active_args[0], style=style_class.error.style, color=style_class.error.color)}",
+                self.parent,
+            )
+
+    def _validate_required_arguments(
+        self,
+        visited: List[Union[_ArgPrivate, _CommandPrivate]],
+        style_class: _PrivateStyle,
+    ) -> None:
+        """Validate that all required arguments are provided.
+
+        Args:
+            visited: List of arguments or commands that have already been visited during parsing.
+            style_class: Style object for error message.
+
+        Raises:
+            ClapPyException: If required arguments or mutually exclusive groups
+                are missing from the `visited` list.
+
+        """
         # Gather required arguments
         required_args = [
             arg
@@ -774,77 +937,6 @@ class _CommandPrivate:
             if isinstance(arg, MutuallyExclusiveGroup)
             if arg.private.required
         ]
-
-        while args:
-            arg_str = args.pop(0)
-
-            # Check for help argument
-            if arg_str in ("-h", "--help"):
-                self.print_help()
-                sys.exit(0)
-            elif arg_str in ("-V", "--version") and self.version:
-                self._print_version()
-                sys.exit(0)
-
-            # Parse positional arguments
-            for arg in self.positional_args:
-                if arg.private not in visited:
-                    args.insert(0, arg_str)
-                    parsed_data.update(arg.private.parse(args, visited))
-                    visited.append(arg.private)
-                    break
-            else:
-                # Parse optional arguments or subcommands
-                for arg in self.get_arguments():
-                    if arg_str in (
-                        arg.private.long_name,
-                        arg.private.short_name,
-                    ):
-                        if arg.private.is_help_arg:
-                            if arg.private.name() == "help":
-                                self.print_help()
-                            elif arg.private.name() == "version":
-                                self._print_version()
-                            sys.exit(0)
-                        kwargs = (
-                            {
-                                "args": args,
-                                "visited": visited,
-                                "allow_unknown": allow_unknown,
-                            }
-                            if isinstance(arg, SubCommand)
-                            else {"argv": args, "visited": visited}
-                        )
-                        parsed_data.update(arg.private.parse(**kwargs))
-                        visited.append(arg.private)
-                        break
-                else:
-                    # Handle unknown arguments
-                    if arg_str == "--" and allow_unknown:
-                        parsed_data.setdefault("unknown", []).extend(args)
-                        args.clear()  # All args that where left have
-                        # been moved to unknown. Clear args to stop loop.
-                    else:
-                        raise ClapPyException(
-                            f"unrecognized arguments: {color_text(arg_str, style=style_class.error.style, color=style_class.error.color)}",
-                            self,
-                        )
-
-        sub_commands, _ = self.get_commands_and_options()
-
-        any_subcommands_called = any(
-            cmd for cmd in sub_commands if cmd.private in visited
-        )
-
-        if self.subcommand_required and sub_commands and not any_subcommands_called:
-            sub_commands_str = ", ".join(
-                [arg.private.long_name for arg in sub_commands]
-            )
-            help_msg = "requires a subcommand but one was not provided\n"
-            help_msg += f"  [subcommands: {sub_commands_str}]\n\n"
-            help_msg += "For more information, try '--help'."
-            raise ClapPyException(help_msg, self)
-
         # Check for missing required arguments
         missing_args = [
             arg.private.long_name for arg in required_args if arg.private not in visited
@@ -879,7 +971,31 @@ class _CommandPrivate:
                 self,
             )
 
-        return {self.name(): parsed_data}
+    def _validate_subcommands(
+        self, visited: List[Union[_ArgPrivate, _CommandPrivate]]
+    ) -> None:
+        """Validate that a required subcommand has been provided.
+
+        Args:
+            visited: List of arguments or commands that have already been visited during parsing.
+
+        Raises:
+            ClapPyException: If a required subcommand is missing.
+
+        """
+        sub_commands, _ = self.get_commands_and_options()
+        if (
+            self.subcommand_required
+            and sub_commands
+            and not any(cmd for cmd in sub_commands if cmd.private in visited)
+        ):
+            sub_commands_str = " | ".join(
+                [arg.private.long_name for arg in sub_commands]
+            )
+            help_msg = "requires a subcommand but one was not provided\n"
+            help_msg += f"  [subcommands: {sub_commands_str}]\n\n"
+            help_msg += "For more information, try '--help'."
+            raise ClapPyException(help_msg, self)
 
 
 class SubCommand:
